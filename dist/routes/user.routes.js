@@ -20,8 +20,15 @@ const crypto_1 = __importDefault(require("crypto"));
 const links_1 = __importDefault(require("../models/links"));
 const router = express_1.default.Router();
 router.get("/", (req, res) => {
-    res.json("the home page is this");
+    res.json("");
 });
+router.get("/user", auth_1.checkForAuthenticationCookie, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    if (!req.user) {
+        return res.status(411).json("Unauthorized");
+    }
+    const user = req.user;
+    return res.json(user);
+}));
 router.post("/signup", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { username, password } = req.body;
@@ -56,7 +63,10 @@ router.post("/signin", (req, res) => __awaiter(void 0, void 0, void 0, function*
             // sameSite: "strict", // Optional, for CSRF protection
         })
             .status(200)
-            .json({ message: "Signed in" });
+            .json({
+            message: "Signed in",
+            token: token
+        });
     }
     catch (e) {
         return res.status(411).json("Invalid User");
@@ -110,7 +120,7 @@ router.delete("/content", (req, res) => __awaiter(void 0, void 0, void 0, functi
         }
         const userId = req.user._id;
         const contentId = req.body.contentId;
-        yield content_1.default.deleteMany({
+        yield content_1.default.deleteOne({
             _id: contentId,
             userId: userId
         });

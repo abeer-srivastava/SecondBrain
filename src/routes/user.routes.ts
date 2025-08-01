@@ -10,7 +10,14 @@ const router=express.Router();
 
 
 router.get("/",(req,res)=>{
-    res.json("the home page is this")
+    res.json("")
+})
+router.get("/user",checkForAuthenticationCookie,async (req,res)=>{
+  if(!req.user){
+    return res.status(411).json("Unauthorized");
+  }
+  const user=(req.user as JwtPayload);
+  return res.json(user); 
 })
 router.post("/signup",async (req,res)=>{
     try{
@@ -48,7 +55,10 @@ router.post("/signin", async (req, res) => {
         // sameSite: "strict", // Optional, for CSRF protection
       })
       .status(200)
-      .json({ message: "Signed in" });
+      .json({
+  message: "Signed in",
+  token: token  
+});
   } catch (e) {
     return res.status(411).json("Invalid User");
   }
@@ -102,7 +112,7 @@ router.delete("/content",async (req,res)=>{
         }
         const userId = (req.user as JwtPayload)._id;
         const contentId=req.body.contentId;
-        await Content.deleteMany({
+        await Content.deleteOne({
             _id:contentId,
             userId:userId
         })
