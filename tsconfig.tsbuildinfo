@@ -1,1 +1,0 @@
-{"root":["./src/index.ts","./src/config/db.config.ts","./src/middlewares/auth.ts","./src/models/content.ts","./src/models/links.ts","./src/models/tags.ts","./src/models/user.ts","./src/routes/user.routes.ts","./src/service/auth.ts"],"version":"5.8.3"}
