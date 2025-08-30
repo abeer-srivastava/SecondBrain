@@ -19,9 +19,6 @@ const content_1 = __importDefault(require("../models/content"));
 const crypto_1 = __importDefault(require("crypto"));
 const links_1 = __importDefault(require("../models/links"));
 const router = express_1.default.Router();
-router.get("/", (req, res) => {
-    res.json("");
-});
 router.get("/user", auth_1.checkForAuthenticationCookie, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     if (!req.user) {
         return res.status(411).json("Unauthorized");
@@ -59,8 +56,6 @@ router.post("/signin", (req, res) => __awaiter(void 0, void 0, void 0, function*
         return res
             .cookie("token", token, {
             httpOnly: true,
-            // secure: true, // Uncomment in production with HTTPS
-            // sameSite: "strict", // Optional, for CSRF protection
         })
             .status(200)
             .json({
@@ -79,10 +74,6 @@ router.post("/content", auth_1.checkForAuthenticationCookie, (req, res) => __awa
     const userId = req.user._id;
     console.log(userId);
     const { link, type, title } = req.body;
-    // console.log("link",link);
-    // console.log("type",type);
-    // console.log("title",title);
-    //   console.log("tags",tags);
     if (!link || !title) {
         return res.status(400).json({ error: "Link and title are required" });
     }
@@ -138,21 +129,18 @@ router.post("/brain/share", auth_1.checkForAuthenticationCookie, (req, res) => _
         }
         const userId = req.user._id;
         const { contentId } = req.body;
-        // console.log(contentId);
-        const sharableContent = yield content_1.default.findOne({
-            _id: contentId,
-            userId,
-        });
+        const sharableContent = yield content_1.default.findOne({ _id: contentId, userId });
         if (!sharableContent) {
             return res.status(404).json({ error: "Content Not Found" });
         }
         const shareLink = crypto_1.default.randomBytes(16).toString("hex");
-        sharableContent.shareLink = shareLink; // <-- Assign it here!
+        sharableContent.shareLink = shareLink;
+        yield sharableContent.save();
         yield links_1.default.create({
-            "hash": shareLink,
+            hash: shareLink,
             userId
         });
-        res.json({ shareUrl: `http://localhost:3000/api/brain/shareLink/${shareLink}` });
+        res.json({ shareUrl: `http://localhost:5173/share/${shareLink}` });
     }
     catch (error) {
         res.status(500).json({ error: "Failed to create a sharable Link" });
@@ -161,31 +149,32 @@ router.post("/brain/share", auth_1.checkForAuthenticationCookie, (req, res) => _
 router.get("/brain/shareLink/:shareLink", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { shareLink } = req.params;
-        if (!shareLink) {
+        if (!shareLink)
             return res.status(400).json({ error: "Missing shareLink parameter" });
-        }
-        const hash = shareLink;
-        const link = yield links_1.default.findOne({ hash });
-        if (!link) {
+        const link = yield links_1.default.findOne({ hash: shareLink });
+        if (!link)
             return res.status(404).json({ error: "Content not found" });
-        }
-        const content = yield content_1.default.findOne({
-            userId: link.userId
-        });
-        // console.log(link.userId);
-        // console.log(String(link.userId))
-        // console.log(typeof String(link.userId))
+        const contents = yield content_1.default.find({ userId: link.userId, shareLink }); // fetch all shared items
         const user = yield user_1.default.findById(String(link.userId));
-        // console.log("user is:", user);
-        // console.log("user === null:", user === null);
-        // console.log("user == null:", user == null);
-        // console.log("user typeof:", typeof user);
-        if (user) {
-            return res.json({
-                user: user.username,
-                content,
-            });
-        }
+        if (!user)
+            return res.status(404).json({ error: "User not found" });
+        // Format response like frontend expects
+        const sharedBrainData = {
+            id: link._id.toString(),
+            ownerName: user.username,
+            title: `${user.username}'s Second Brain`,
+            description: "Shared Brain Content",
+            content: contents.map((c) => ({
+                id: c._id.toString(),
+                title: c.title,
+                content: c.link || "", // or c.content if you store the text
+                type: c.type,
+                url: c.link, // if applicable
+                tags: c.tags || [],
+                createdAt: c.createdAt,
+            }))
+        };
+        return res.json(sharedBrainData);
     }
     catch (error) {
         console.error("Fetch shared content error:", error);

@@ -62,7 +62,8 @@ const ShareBrain = () => {
       });
 
       setSharedBrains(response.data.sharedBrains || []);
-    } catch (err: any) {
+
+    } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (axios.isAxiosError(err)) {
         if (err.response?.status === 401) {
           setError("Your session has expired. Please log in again.");
@@ -112,7 +113,7 @@ const ShareBrain = () => {
 
       // Refresh the list
       fetchSharedBrains();
-    } catch (err: any) {
+    } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (axios.isAxiosError(err)) {
         setError(err.response?.data?.error || "Failed to revoke share");
       } else {
@@ -212,7 +213,7 @@ const ShareBrain = () => {
                       <Button
                         onClick={() => window.open(brain.shareUrl, '_blank')}
                         size="sm"
-                        variant="outline"
+                        variant="default"
                         className="border-[#124559] text-[#124559] hover:bg-[#124559] hover:text-[#EFF6E0]"
                       >
                         👁️ Preview
@@ -220,7 +221,7 @@ const ShareBrain = () => {
                       <Button
                         onClick={() => revokeShare(brain.id)}
                         size="sm"
-                        variant="destructive"
+                        variant="neutral"
                         className="bg-red-600 text-white hover:bg-red-700"
                       >
                         🗑️ Revoke

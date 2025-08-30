@@ -4,9 +4,9 @@ import { useForm } from "react-hook-form";
 import { Button } from "../ui/button";
 import {BrainSideContent} from "../sideComponent"
 import axios from "axios"
-import {BACKEND_URL, testBackendConnectivity} from "../../config.ts"
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { BACKEND_URL } from "@/config";
 
 interface IFormInput {
   username: string;
@@ -52,39 +52,20 @@ const testTokenImmediately = async (token: string) => {
 };
 
 // Check current stored tokens
-const currentTokens = () => {
-  const localStorageToken = localStorage.getItem("token");
-  const cookieToken = getCookie('token');
-  
-  return { localStorageToken, cookieToken };
-};
+
 
 export default function Signin() {
   const navigate = useNavigate();
   const [error, setError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string>("");
   const { register, handleSubmit, formState: { errors } } = useForm<IFormInput>();
   
-  const testBackend = async () => {
-    setDebugInfo("Testing backend connectivity...");
-    const result = await testBackendConnectivity();
-    console.log("Backend test result:", result);
-    setDebugInfo(`Backend test: OPTIONS=${result.optionsWorks}, POST=${result.postEndpointExists}`);
-  };
-  
-  const checkTokens = () => {
-    const tokens = currentTokens();
-    setDebugInfo(`localStorage: ${tokens.localStorageToken ? 'Yes' : 'No'}, Cookie: ${tokens.cookieToken ? 'Yes' : 'No'}`);
-  };
-  
+
   const onSubmit: SubmitHandler<IFormInput> = async (data) => {
     setError("");
     setIsLoading(true);
-    setDebugInfo("Starting signin process...");
     
     try {
-      setDebugInfo("Sending signin request...");
       
       // Log the exact request we're about to send
       const requestData = {
@@ -99,12 +80,7 @@ export default function Signin() {
         },
         withCredentials: true // Enable cookies for this request
       });
-      
-      
-      
-      // // Wait a moment for the cookie to be set
-      // await new Promise(resolve => setTimeout(resolve, 100));
-      
+ 
       // Try to get token from cookies
       let jwt = getCookie('token');
       if (!jwt) {
@@ -135,7 +111,6 @@ export default function Signin() {
       // Store the token in localStorage
       localStorage.setItem("token", formattedToken);
       
-      setDebugInfo("Token stored and validated, navigating to dashboard...");
       
       // Also set the token as a cookie for backup (non-HttpOnly)
       document.cookie = `token=${formattedToken}; path=/; max-age=86400; SameSite=Lax`;
@@ -150,14 +125,13 @@ export default function Signin() {
       
       // Add a small delay to ensure localStorage is updated
       setTimeout(() => {
-        navigate("/");
+        navigate("/page");
       }, 100);
       
     } catch (err) {
       console.error("=== SIGNIN ERROR ===");
       console.error("Signin error:", err);
       setIsLoading(false);
-      setDebugInfo("Signin failed");
       
       if (axios.isAxiosError(err)) {
         console.log("=== DETAILED ERROR ANALYSIS ===");

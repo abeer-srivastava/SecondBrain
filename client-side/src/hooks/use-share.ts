@@ -60,9 +60,8 @@ export const useShare = (): UseShareReturn => {
           withCredentials: true
         }
       );
-
-      setIsSharing(false);
-      return response.data.shareUrl;
+      console.log("the url is in the content",response.data)
+      return response.data.shareUrl; 
 
     } catch (err) {
       setIsSharing(false);

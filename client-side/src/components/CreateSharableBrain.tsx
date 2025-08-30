@@ -12,32 +12,36 @@ import {
 interface CreateSharableBrainProps {
   open: boolean;
   onClose: () => void;
+  contentId: string | null;
 }
 
-const CreateSharableBrain = ({ open, onClose }: CreateSharableBrainProps) => {
+const CreateSharableBrain = ({ open, onClose,contentId }: CreateSharableBrainProps) => {
   const { shareContent, isSharing, error, clearError } = useShare();
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
 
   const handleShare = async () => {
-    clearError();
-    setShareUrl(null);
-    setIsSuccess(false);
-    
-    // Share the entire brain (using 'all' as contentId to indicate full brain sharing)
-    const url = await shareContent('all');
-    if (url) {
-      setShareUrl(url);
-      setIsSuccess(true);
-      
-      // Copy to clipboard
-      try {
-        await navigator.clipboard.writeText(url);
-      } catch (err) {
-        console.warn('Failed to copy to clipboard:', err);
-      }
+  clearError();
+  setShareUrl(null);
+  setIsSuccess(false);    
+
+  if (!contentId) return;
+
+  // Share only the specific contentId instead of entire brain
+  const url = await shareContent(contentId);
+  if (url) {
+    console.log(url)
+    setShareUrl(url);
+    setIsSuccess(true);
+
+    // Copy to clipboard
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (err) {
+      console.warn('Failed to copy to clipboard:', err);
     }
-  };
+  }
+};
 
   const handleClose = () => {
     setShareUrl(null);
@@ -91,7 +95,7 @@ const CreateSharableBrain = ({ open, onClose }: CreateSharableBrainProps) => {
                   <Button
                     onClick={copyToClipboard}
                     size="sm"
-                    className="bg-[#124559] text-[#EFF6E0] hover:bg-[#01161E]"
+                    className="bg-[#124559] text-[#232915] hover:bg-[#01161E]"
                   >
                     📋 Copy
                   </Button>
@@ -131,7 +135,7 @@ const CreateSharableBrain = ({ open, onClose }: CreateSharableBrainProps) => {
         <div className="flex justify-end gap-2 pt-4 border-t border-[#AEC3B0]">
           <Button
             onClick={handleClose}
-            variant="outline"
+            variant="default"
             className="border-[#124559] text-[#124559] hover:bg-[#124559] hover:text-[#EFF6E0]"
           >
             Close

@@ -1,7 +1,6 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import {
   Card,
-  CardContent,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -22,6 +21,8 @@ import {
 import axios from "axios";
 
 import { BACKEND_URL } from "../config.ts";
+import { Button } from "./ui/button.tsx";
+import CreateSharableBrain from "./CreateSharableBrain.tsx";
 
 interface ContentItem {
   _id: string;
@@ -60,10 +61,12 @@ const formatToken = (token: string): string => {
 };
 
 const CardsDisplay = forwardRef<CardsDisplayRef, CardsDisplayProps>(({ activeFilter = "all" }, ref) => {
+
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>("");
-
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   // Fetch content from database
   const fetchContent = async () => {
     try {
@@ -195,8 +198,9 @@ const CardsDisplay = forwardRef<CardsDisplayRef, CardsDisplayProps>(({ activeFil
       // Alternative: Use placeholder with domain name
       // return `https://via.placeholder.com/300x200/124559/ffffff?text=${encodeURIComponent(domain)}`;
       
-    } catch (error) {
+    } catch (error:any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       // If URL is invalid, use placeholder
+      console.log(error)
       return `https://via.placeholder.com/300x200/124559/ffffff?text=${encodeURIComponent('Invalid URL')}`;
     }
   };
@@ -258,7 +262,6 @@ const CardsDisplay = forwardRef<CardsDisplayRef, CardsDisplayProps>(({ activeFil
   const commonCardClasses = "bg-[#EFF6E0] border-[#AEC3B0] hover:border-[#598392] transition-all duration-200 rounded-lg shadow-sm hover:shadow-md overflow-hidden cursor-pointer";
   const commonHeaderClasses = "text-[#01161E] p-6 pb-4 border-b border-[#AEC3B0]";
   const commonTitleClasses = "text-[#124559] px-6 pt-4 text-xl font-bold";
-  const commonContentClasses = "text-[#598392] px-6 py-4 text-base leading-relaxed";
   const commonFooterClasses = "text-[#598392] px-6 pt-2 pb-6 text-sm border-t border-[#AEC3B0] bg-[#AEC3B0]/20";
 
   // Filter content based on activeFilter
@@ -347,9 +350,12 @@ const CardsDisplay = forwardRef<CardsDisplayRef, CardsDisplayProps>(({ activeFil
                     {getTypeIcon(item.type)}
                     <h1 className="text-lg font-semibold text-[#01161E] capitalize">{item.type}</h1>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <Button onClick={()=>{
+                    setSelectedContentId(item._id);
+                    setIsShareOpen(true)
+                    }} className="flex items-center gap-2 border-0 hover:bg-[#124559] rounded-3xl text-[#598392]">
                     <Share2 className="h-4 w-4 text-[#598392] hover:text-[#124559] cursor-pointer transition-colors" />
-                  </div>
+                  </Button>
                 </div>
               </CardHeader>
 
@@ -357,17 +363,7 @@ const CardsDisplay = forwardRef<CardsDisplayRef, CardsDisplayProps>(({ activeFil
               <CardTitle className={commonTitleClasses}>{item.title}</CardTitle>
 
               {/* Card Content */}
-              <CardContent className={commonContentClasses}>
-                <div className="space-y-2">
-                  <p className="text-[#598392] line-clamp-3">
-                    {item.description || "No description available"}
-                  </p>
-                  <div className="flex items-center gap-2 text-sm text-[#AEC3B0]">
-                    <LinkIcon className="h-3 w-3" />
-                    <span className="truncate">{item.link}</span>
-                  </div>
-                </div>
-              </CardContent>
+             
 
               {/* Card Footer */}
               <CardFooter className={commonFooterClasses}>
@@ -382,7 +378,15 @@ const CardsDisplay = forwardRef<CardsDisplayRef, CardsDisplayProps>(({ activeFil
                   </div>
                 </div>
               </CardFooter>
+              <CreateSharableBrain 
+                open={isShareOpen} 
+                onClose={() =>
+                  setIsShareOpen(false)
+                  } 
+                  contentId={selectedContentId}
+                />
             </Card>
+            
           );
         })}
       </div>

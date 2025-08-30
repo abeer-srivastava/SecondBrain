@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { BACKEND_URL, testTokenFormats } from "../../config.ts";
+import { BACKEND_URL } from "../../config.ts";
 import {
   SidebarInset,
   SidebarProvider,
@@ -40,7 +40,7 @@ export default function Page() {
   const [debugInfo, setDebugInfo] = useState<string>("");
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const cardsDisplayRef = useRef<{ fetchContent: () => void }>(null);
-
+  const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   useEffect(() => {
     validateToken();
   }, [navigate]);
@@ -93,7 +93,7 @@ export default function Page() {
       setIsAuthenticated(true);
       setIsLoading(false);
       setAuthError("");
-    } catch (err: any) {
+    } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.error("Token validation failed:", err);
       console.log("Error details:", {
         status: err.response?.status,
@@ -132,27 +132,16 @@ export default function Page() {
     }
   };
 
-  const testTokenFormatsDebug = async () => {
-    const token = localStorage.getItem("token") || getCookie('token');
-    if (token) {
-      console.log("Testing different token formats...");
-      const workingFormat = await testTokenFormats(token);
-      if (workingFormat) {
-        setDebugInfo(`Working format found: ${workingFormat.name}`);
-        console.log("Working format:", workingFormat);
-      } else {
-        setDebugInfo("No working token format found");
-      }
-    }
-  };
+
 
   const handleOpenModel = () => {
     setopenModal(true);
   };
 
-  const handleOpenShareModal = () => {
-    setOpenShareModal(true);
-  };
+const handleOpenShareModal = (contentId: string) => {
+  setSelectedContentId(contentId);
+  setOpenShareModal(true);
+};
 
   // Callback to refresh content after adding new content
   const handleContentAdded = () => {
@@ -193,12 +182,7 @@ export default function Page() {
               >
                 Try Again
               </button>
-              <button 
-                onClick={testTokenFormatsDebug}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Test Token Formats
-              </button>
+
             </div>
           </div>
         </div>
@@ -220,7 +204,8 @@ export default function Page() {
       />
       <CreateSharableBrain 
         open={openShareModal} 
-        onClose={() => setOpenShareModal(false)} 
+        onClose={() => setOpenShareModal(false)}
+        contentId={selectedContentId} 
       />
       <SidebarProvider>
         <AppSidebar activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
@@ -229,7 +214,11 @@ export default function Page() {
             <div className="flex items-center px-4">
               <SidebarTrigger className="text-[#124559] hover:text-[#01161E] mr-4" />
             </div>
-            <Navbar onAddContentClick={handleOpenModel} onShareContentClick={handleOpenShareModal} />
+            <Navbar 
+              onAddContentClick={handleOpenModel} 
+              onShareContentClick={(id) => handleOpenShareModal(id)} 
+              currentContentId={selectedContentId as string} 
+/>
           </header>
           <div className="min-h-[100vh] flex-1 rounded-base bg-[#EFF6E0] md:min-h-min">
             <div className="flex flex-1 flex-col p-6 pt-8">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { BACKEND_URL } from '../../config';
 
@@ -28,8 +28,10 @@ const SharedBrainView = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+
   useEffect(() => {
     if (shareId) {
+      console.log("the shared hash in the sharedBrain",shareId);
       fetchSharedBrain(shareId);
     }
   }, [shareId]);
@@ -40,9 +42,9 @@ const SharedBrainView = () => {
 
     try {
       // This endpoint should be public - no authentication required
-      const response = await axios.get(`${BACKEND_URL}/brain/public/${id}`);
+      const response = await axios.get(`${BACKEND_URL}/brain/shareLink/${id}`);
       setSharedBrain(response.data);
-    } catch (err: any) {
+    } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (axios.isAxiosError(err)) {
         if (err.response?.status === 404) {
           setError("This shared brain could not be found or may have been removed.");
@@ -91,7 +93,7 @@ const SharedBrainView = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#EFF6E0] to-[#AEC3B0]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#124559] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#124559] mx-auto mb-4 bg-gradient-to-br from-[#EFF6E0] to-[#AEC3B0]"></div>
           <p className="text-[#124559] font-semibold">Loading shared brain...</p>
         </div>
       </div>
@@ -131,11 +133,11 @@ const SharedBrainView = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#EFF6E0] to-[#AEC3B0]">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-[#AEC3B0]">
+      <div className="bg-gradient-to-br from-[#EFF6E0] to-[#AEC3B0] shadow-sm border-b border-[#AEC3B0]">
         <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-[#01161E] mb-1">
+            <div className=''>
+              <h1 className="text-2xl font-bold text-[#01161E] mb-1 ">
                 🧠 {sharedBrain.title || `${sharedBrain.ownerName}'s Second Brain`}
               </h1>
               <p className="text-[#598392]">
@@ -167,7 +169,7 @@ const SharedBrainView = () => {
             {sharedBrain.content.map((item) => (
               <div
                 key={item.id}
-                className="bg-white rounded-lg shadow-sm border border-[#AEC3B0] p-6 hover:shadow-md transition-shadow"
+                className="bg-gradient-to-br from-[#EFF6E0] to-[#AEC3B0] rounded-lg shadow-sm border border-[#AEC3B0] p-6 hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -222,16 +224,16 @@ const SharedBrainView = () => {
       </div>
 
       {/* Footer */}
-      <div className="bg-white border-t border-[#AEC3B0] mt-12">
-        <div className="max-w-6xl mx-auto px-6 py-6 text-center">
-          <p className="text-[#598392] text-sm">
+      <div className=" flex flex-col bg-gradient-to-br from-[#EFF6E0] to-[#AEC3C1] border-t border-[#AEC3B0] ">
+        <div className="max-w-6xl mx-auto px-6 py-6 text-center justify-end items-end">
+          <p className="text-[#598392] text-sm ">
             This is a shared Second Brain. Want to create your own?{' '}
-            <a
-              href="/"
+            <Link
+              to="/"
               className="text-[#124559] hover:text-[#01161E] font-medium transition-colors"
             >
               Get started here
-            </a>
+            </Link>
           </p>
         </div>
       </div>

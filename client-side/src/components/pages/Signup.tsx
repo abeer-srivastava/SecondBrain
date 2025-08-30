@@ -27,8 +27,8 @@ export default function Signup() {
         password: data.password
       });
       console.log("User Signed Up");
-      navigate("/");
-    } catch (err: any) {
+      navigate("/signin");
+    } catch (err: any) {// eslint-disable-line @typescript-eslint/no-explicit-any
       setError(err.response?.data?.message || "An error occurred during signup");
     }
   };
