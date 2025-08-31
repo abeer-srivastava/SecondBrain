@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 import Tag from "./tags";
 import User from "./user";
-const contentType=["tweet","video","article","document","links"];
-const contentSchema=new mongoose.Schema({
+export const contentType=["tweet","video","article","document","links"] as const ;
+export const contentSchema=new mongoose.Schema({
     link:{
         type:String,
         required:true,

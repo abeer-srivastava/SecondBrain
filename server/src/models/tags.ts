@@ -2,7 +2,7 @@ import mongoose, { mongo } from "mongoose";
 
 
 
-const tagSchema=new mongoose.Schema({
+export const tagSchema=new mongoose.Schema({
     title:{
         type:String,
         required:true,
@@ -10,5 +10,5 @@ const tagSchema=new mongoose.Schema({
     }
 });
 
-const Tag=mongoose.model("tag",tagSchema);
-export default Tag
+export const Tag=mongoose.model("tag",tagSchema);
+
