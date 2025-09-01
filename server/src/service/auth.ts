@@ -1,7 +1,5 @@
 import JWT, { JwtPayload } from "jsonwebtoken";
 
-
-
 const secret="@Beer123!";
 
 export interface JWTPayload {

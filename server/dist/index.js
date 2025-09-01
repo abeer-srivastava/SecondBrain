@@ -17,12 +17,14 @@ const PORT = process.env.PORT || 3000;
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, cookie_parser_1.default)());
-app.use(auth_1.checkForAuthenticationCookie);
+// CORS must be configured before authentication middleware
 app.use((0, cors_1.default)({
     origin: 'http://localhost:5173',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cookie'],
 }));
+// Authentication middleware should come after CORS
+app.use(auth_1.checkForAuthenticationCookie);
 app.use("/api", user_routes_1.default);
 app.listen(PORT, () => { console.log("Server Started On PORT ", PORT); });

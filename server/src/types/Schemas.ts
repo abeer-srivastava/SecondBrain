@@ -25,7 +25,7 @@ export const ContentSchema = z.object({
     title: z.string().min(1, {message: "Enter title"}),
     tags: z.array(tagSchema),
     contentId: z.string(),
-    createdAt: z.string()
+
 })
 
 export type ContentType = z.infer<typeof ContentSchema>

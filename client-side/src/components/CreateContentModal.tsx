@@ -6,11 +6,13 @@ import axios from "axios";
 import { BACKEND_URL } from "../config.ts";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { TagManager } from "./TagManager";
 
 interface IProps {
   title: string;
   link: string;
   type: string;
+  tags?: string[];
 }
 
 interface CreateContentModalProps {
@@ -44,7 +46,8 @@ export const CreateContentModal = ({
   const navigate = useNavigate();
   const [error, setError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<IProps>();
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm<IProps>();
 
   const onSubmit: SubmitHandler<IProps> = async (data) => {
     setError("");
@@ -69,12 +72,18 @@ export const CreateContentModal = ({
     try {
       console.log("Adding content:", data);
       
+      // Add selected tags to the data
+      const contentData = {
+        ...data,
+        tags: selectedTags
+      };
+      
       // Format the token properly
       const formattedToken = formatToken(token);
       
       const response = await axios.post(
         `${BACKEND_URL}/content`,
-        data,
+        contentData,
         {
           headers: {
             Authorization: formattedToken,
@@ -96,6 +105,8 @@ export const CreateContentModal = ({
       if (onContentAdded) {
         onContentAdded();
       }
+
+      setIsLoading(false);
     } catch (err) {
       console.error("Error adding content:", err);
       setIsLoading(false);
@@ -131,6 +142,7 @@ export const CreateContentModal = ({
   // Reset form when modal closes
   const handleClose = () => {
     reset();
+    setSelectedTags([]);
     setError("");
     onClose();
   };
@@ -275,7 +287,10 @@ export const CreateContentModal = ({
                     <span className="text-red-500 text-xs mt-1">{errors.type.message}</span>
                   )}
                 </div>
-             
+                  <TagManager 
+                    selectedTags={selectedTags}
+                    onTagsChange={setSelectedTags}
+                  />
                 <div className="flex gap-3 pt-2">
                   <Button
                     type="button"

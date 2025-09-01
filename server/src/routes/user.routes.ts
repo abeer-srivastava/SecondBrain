@@ -4,8 +4,9 @@ import { checkForAuthenticationCookie } from "../middlewares/auth";
 import Content from "../models/content";
 import { JwtPayload } from "jsonwebtoken";
 import crypto from "crypto";
-
 import Link from "../models/links";
+import { QdrantUpsertPoints } from "../utils/QdrantProcessing";
+import { Tag } from "../models/tags";
 const router=express.Router();
 
 router.get("/user",checkForAuthenticationCookie,async (req,res)=>{
@@ -47,6 +48,10 @@ router.post("/signin", async (req, res) => {
     return res
       .cookie("token", token, {
         httpOnly: true,
+        secure: false, // Set to true in production with HTTPS
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
       })
       .status(200)
       .json({
@@ -63,20 +68,38 @@ router.post("/content", checkForAuthenticationCookie, async (req, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
   const userId = (req.user as JwtPayload)._id;
-  console.log(userId);
-  const { link, type, title } = req.body;
-  if (!link || !title) {
-    return res.status(400).json({ error: "Link and title are required" });
+  console.log("the userId is ",userId);
+  const { link, type, title, tags } = req.body;
+  if (!link || !title || !type) {
+    console.log("link, title, and type are required")
+    return res.status(400).json({ error: "Link, title, and type are required" });
   }
+  
+  // Validate content type
+  if (!["tweet", "video", "article", "document", "link"].includes(type)) {
+    return res.status(400).json({ error: "Invalid content type" });
+  }
+  
   try {
+    // Process tags - ensure they're strings and filter out empty ones
+    const processedTags = Array.isArray(tags) 
+      ? tags.filter(tag => tag && tag.trim()) 
+      : [];
+    
     const content = await Content.create({
       link,
       type,
       title,
-      userId
+      userId,
+      tags: processedTags
     });
+    console.log("the content is added ",content);
+    const data={contentId:String(content._id),link,type,title,tags:processedTags}
+    console.log(data);
+    // await QdrantUpsertPoints(data)
     res.status(201).json(content);
   } catch (err) {
+    console.error("Error creating content:", err);
     res.status(500).json({ error: "Failed to create content" });
   }
 });
@@ -174,6 +197,66 @@ router.get("/brain/shareLink/:shareLink", async (req, res) => {
   } catch (error) {
     console.error("Fetch shared content error:", error);
     res.status(500).json({ error: "Failed to fetch shared content" });
+  }
+});
+
+// Tag management routes
+router.post("/tags", checkForAuthenticationCookie, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Tag name is required" });
+    }
+    
+    // Check if tag already exists
+    const existingTag = await Tag.findOne({ name: name.trim() });
+    if (existingTag) {
+      return res.status(409).json({ error: "Tag already exists" });
+    }
+    
+    const tag = await Tag.create({ name: name.trim() });
+    res.status(201).json(tag);
+  } catch (error) {
+    console.error("Create tag error:", error);
+    res.status(500).json({ error: "Failed to create tag" });
+  }
+});
+
+router.get("/tags", checkForAuthenticationCookie, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const tags = await Tag.find().sort({ name: 1 });
+    res.json(tags);
+  } catch (error) {
+    console.error("Fetch tags error:", error);
+    res.status(500).json({ error: "Failed to fetch tags" });
+  }
+});
+
+router.delete("/tags/:id", checkForAuthenticationCookie, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const { id } = req.params;
+    const tag = await Tag.findByIdAndDelete(id);
+    
+    if (!tag) {
+      return res.status(404).json({ error: "Tag not found" });
+    }
+    
+    res.json({ message: "Tag deleted successfully" });
+  } catch (error) {
+    console.error("Delete tag error:", error);
+    res.status(500).json({ error: "Failed to delete tag" });
   }
 });
 

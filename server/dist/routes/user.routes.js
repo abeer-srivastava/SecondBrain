@@ -18,6 +18,7 @@ const auth_1 = require("../middlewares/auth");
 const content_1 = __importDefault(require("../models/content"));
 const crypto_1 = __importDefault(require("crypto"));
 const links_1 = __importDefault(require("../models/links"));
+const tags_1 = require("../models/tags");
 const router = express_1.default.Router();
 router.get("/user", auth_1.checkForAuthenticationCookie, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     if (!req.user) {
@@ -56,6 +57,10 @@ router.post("/signin", (req, res) => __awaiter(void 0, void 0, void 0, function*
         return res
             .cookie("token", token, {
             httpOnly: true,
+            secure: false, // Set to true in production with HTTPS
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 24 * 60 * 60 * 1000 // 24 hours
         })
             .status(200)
             .json({
@@ -72,21 +77,36 @@ router.post("/content", auth_1.checkForAuthenticationCookie, (req, res) => __awa
         return res.status(401).json({ error: "Unauthorized" });
     }
     const userId = req.user._id;
-    console.log(userId);
-    const { link, type, title } = req.body;
-    if (!link || !title) {
-        return res.status(400).json({ error: "Link and title are required" });
+    console.log("the userId is ", userId);
+    const { link, type, title, tags } = req.body;
+    if (!link || !title || !type) {
+        console.log("link, title, and type are required");
+        return res.status(400).json({ error: "Link, title, and type are required" });
+    }
+    // Validate content type
+    if (!["tweet", "video", "article", "document", "link"].includes(type)) {
+        return res.status(400).json({ error: "Invalid content type" });
     }
     try {
+        // Process tags - ensure they're strings and filter out empty ones
+        const processedTags = Array.isArray(tags)
+            ? tags.filter(tag => tag && tag.trim())
+            : [];
         const content = yield content_1.default.create({
             link,
             type,
             title,
-            userId
+            userId,
+            tags: processedTags
         });
+        console.log("the content is added ", content);
+        const data = { contentId: String(content._id), link, type, title, tags: processedTags };
+        console.log(data);
+        // await QdrantUpsertPoints(data)
         res.status(201).json(content);
     }
     catch (err) {
+        console.error("Error creating content:", err);
         res.status(500).json({ error: "Failed to create content" });
     }
 }));
@@ -179,6 +199,59 @@ router.get("/brain/shareLink/:shareLink", (req, res) => __awaiter(void 0, void 0
     catch (error) {
         console.error("Fetch shared content error:", error);
         res.status(500).json({ error: "Failed to fetch shared content" });
+    }
+}));
+// Tag management routes
+router.post("/tags", auth_1.checkForAuthenticationCookie, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+        const { name } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ error: "Tag name is required" });
+        }
+        // Check if tag already exists
+        const existingTag = yield tags_1.Tag.findOne({ name: name.trim() });
+        if (existingTag) {
+            return res.status(409).json({ error: "Tag already exists" });
+        }
+        const tag = yield tags_1.Tag.create({ name: name.trim() });
+        res.status(201).json(tag);
+    }
+    catch (error) {
+        console.error("Create tag error:", error);
+        res.status(500).json({ error: "Failed to create tag" });
+    }
+}));
+router.get("/tags", auth_1.checkForAuthenticationCookie, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+        const tags = yield tags_1.Tag.find().sort({ name: 1 });
+        res.json(tags);
+    }
+    catch (error) {
+        console.error("Fetch tags error:", error);
+        res.status(500).json({ error: "Failed to fetch tags" });
+    }
+}));
+router.delete("/tags/:id", auth_1.checkForAuthenticationCookie, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+        const { id } = req.params;
+        const tag = yield tags_1.Tag.findByIdAndDelete(id);
+        if (!tag) {
+            return res.status(404).json({ error: "Tag not found" });
+        }
+        res.json({ message: "Tag deleted successfully" });
+    }
+    catch (error) {
+        console.error("Delete tag error:", error);
+        res.status(500).json({ error: "Failed to delete tag" });
     }
 }));
 exports.default = router;

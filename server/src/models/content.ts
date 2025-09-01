@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
-import Tag from "./tags";
+import {Tag} from "./tags";
 import User from "./user";
-export const contentType=["tweet","video","article","document","links"] as const ;
+export const contentType=["tweet","video","article","document","link"] as const ;
 export const contentSchema=new mongoose.Schema({
     link:{
         type:String,
@@ -17,8 +17,8 @@ export const contentSchema=new mongoose.Schema({
         required:true,
     },
     tags:[{
-        type:mongoose.Types.ObjectId,
-        ref:"Tag"
+        type: String,
+        required: false
     }],
     userId:{
         type:mongoose.Types.ObjectId,
