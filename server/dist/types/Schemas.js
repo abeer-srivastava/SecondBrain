@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ContentSchema = exports.AuthSchema = void 0;
 const zod_1 = require("zod");
 const content_1 = require("../models/content");
+// Tag schema for when tags are objects (legacy support)
 const tagSchema = zod_1.z.object({
     tagId: zod_1.z.string(),
     title: zod_1.z
@@ -12,6 +13,8 @@ const tagSchema = zod_1.z.object({
         .max(12, { message: "Max length of tag is 12" })
         .transform((v) => v.replace(/[&\/\\#, +()$~%.'":*?<>{}]/g, '-'))
 });
+// Union type for tags - can be either strings or objects
+const tagUnionSchema = zod_1.z.union([zod_1.z.string(), tagSchema]);
 exports.AuthSchema = zod_1.z.object({
     username: zod_1.z.string().min(3, { message: "Username has to be minimum of 3 letters" })
         .max(10, { message: "Username has to be maximum of 10 letters" }),
@@ -22,6 +25,6 @@ exports.ContentSchema = zod_1.z.object({
     link: zod_1.z.string().min(1, { message: "Enter a valid link" }),
     type: zod_1.z.enum(content_1.contentType, { message: "Enter a valid type" }),
     title: zod_1.z.string().min(1, { message: "Enter title" }),
-    tags: zod_1.z.array(tagSchema),
+    tags: zod_1.z.array(tagUnionSchema), // Support both string and object tags
     contentId: zod_1.z.string(),
 });

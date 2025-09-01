@@ -1,4 +1,4 @@
-import { QdrantClient, QdrantClientUnexpectedResponseError } from "@qdrant/js-client-rest";
+import { QdrantClientUnexpectedResponseError } from "@qdrant/js-client-rest";
 import { ContentType } from "../types/Schemas";
 import { cleanPayload } from "./cleanPayload";
 import { 
@@ -8,12 +8,7 @@ import {
     semanticSearchWithContext,
     EnhancedEmbeddingData 
 } from "./TextEmbeddings";
-
-const client = new QdrantClient({ 
-    host: process.env.QDRANT_HOST, 
-    port: 6333,
-    apiKey: process.env.QDRANT_API
-});
+import { client } from "../config/Qd.config";
 
 export const QdrantUpsertPoints = async(data: ContentType) => {
     console.log("data in Qdrant", data);
@@ -28,7 +23,14 @@ export const QdrantUpsertPoints = async(data: ContentType) => {
             title: data.title,
             link: data.link,
             type: data.type,
-            tags: data.tags.map(tag => tag.title),
+            tags: data.tags.map(tag => {
+                if (typeof tag === 'string') {
+                    return tag;
+                } else if (tag && typeof tag === 'object' && 'title' in tag) {
+                    return tag.title;
+                }
+                return '';
+            }).filter(Boolean),
         });
 
         // Create enhanced embedding data
@@ -115,7 +117,11 @@ export const QdrantSearchWithContext = async (
         const enhancedResults = await semanticSearchWithContext(
             query, 
             queryEmbeddings, 
-            searchResults
+            searchResults.map(result => ({
+                id: String(result.id),
+                payload: result.payload || {},
+                score: result.score
+            }))
         );
         
         return enhancedResults;
@@ -139,10 +145,10 @@ export const getIntelligentReferences = async (
         });
         
         const contentForAnalysis = allContent.points.map(point => ({
-            contentId: point.id,
-            title: point.payload?.title || '',
-            tags: point.payload?.tagTitles || [],
-            type: point.payload?.type || ''
+            contentId: String(point.id),
+            title: String(point.payload?.title || ''),
+            tags: Array.isArray(point.payload?.tagTitles) ? point.payload.tagTitles.map(t => String(t)) : [],
+            type: String(point.payload?.type || '')
         }));
         
         // Generate intelligent references using LLM
@@ -179,7 +185,7 @@ export const getContentRecommendations = async (
         
         // Search for similar content
         const similarContent = await client.search("secondBrain", {
-            vector: target.vector!,
+            vector: target.vector as number[],
             limit: limit + 1, // +1 to exclude the target itself
             with_payload: true,
             filter: {
@@ -195,10 +201,10 @@ export const getContentRecommendations = async (
         // Enhance with LLM analysis
         const recommendations = await semanticSearchWithContext(
             `Content similar to: ${target.payload?.title}`,
-            target.vector!,
+            target.vector as number[],
             similarContent.map(item => ({
-                id: item.id,
-                payload: item.payload,
+                id: String(item.id),
+                payload: item.payload || {},
                 score: item.score
             }))
         );
@@ -238,14 +244,14 @@ export const batchAnalyzeContent = async () => {
             try {
                 // Re-analyze with LLM
                 const llmAnalysis = await analyzeContentWithLLM({
-                    title: point.payload?.title || '',
-                    link: point.payload?.link || '',
-                    type: point.payload?.type || '',
-                    tags: point.payload?.tagTitles || [],
+                    title: String(point.payload?.title || ''),
+                    link: String(point.payload?.link || ''),
+                    type: String(point.payload?.type || ''),
+                    tags: Array.isArray(point.payload?.tagTitles) ? point.payload.tagTitles.map(t => String(t)) : [],
                 });
                 
-                // Update the point with new analysis
-                await client.update("secondBrain", {
+                // Update the point with new analysis using upsert instead of update
+                await client.upsert("secondBrain", {
                     points: [{
                         id: point.id,
                         payload: {
@@ -257,12 +263,13 @@ export const batchAnalyzeContent = async () => {
                             insights: llmAnalysis.insights,
                             llmAnalyzed: true,
                             analyzedAt: new Date().toISOString()
-                        }
+                        },
+                        vector: point.vector as number[]
                     }]
                 });
                 
                 results.push({
-                    contentId: point.id,
+                    contentId: String(point.id),
                     success: true,
                     analysis: llmAnalysis
                 });
@@ -272,12 +279,12 @@ export const batchAnalyzeContent = async () => {
                 // Small delay to avoid rate limiting
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 
-            } catch (error) {
+            } catch (error: any) {
                 console.error(`Error analyzing content ${point.id}:`, error);
                 results.push({
-                    contentId: point.id,
+                    contentId: String(point.id),
                     success: false,
-                    error: error.message
+                    error: error.message || 'Unknown error'
                 });
             }
         }

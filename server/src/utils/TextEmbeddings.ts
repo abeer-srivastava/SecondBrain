@@ -1,14 +1,43 @@
 import { CleanedPayload } from "./cleanPayload";
 import { CohereClient } from 'cohere-ai';
-import { OpenAI } from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const cohere = new CohereClient({
-    token: process.env.COHERE_API_KEY
-});
+// Initialize Cohere client only if API key is available
+let cohere: CohereClient | null = null;
+try {
+    if (process.env.COHERE_API_KEY) {
+        cohere = new CohereClient({
+            token: process.env.COHERE_API_KEY
+        });
+        console.log("Cohere client initialized successfully");
+    } else {
+        console.warn("COHERE_API_KEY not found, embeddings will use fallback method",process.env.COHERE_API_KEY);
+    }
+} catch (error) {
+    console.warn("Failed to initialize Cohere client:", error);
+    cohere = null;
+}
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+// Initialize Gemini client only if API key is available
+let genAI: GoogleGenerativeAI | null = null;
+let geminiModel: any = null;
+
+try {
+    if (process.env.GEMINI_API_KEY) {
+        console.log(process.env.GEMINI_API_KEY);
+        genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        geminiModel = genAI.getGenerativeModel({ 
+            model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' 
+        });
+        console.log("Gemini client initialized successfully");
+    } else {
+        console.warn("GEMINI_API_KEY not found, LLM features will be disabled");
+    }
+} catch (error) {
+    console.warn("Failed to initialize Gemini client:", error);
+    genAI = null;
+    geminiModel = null;
+}
 
 export interface EnhancedEmbeddingData {
     title: string;
@@ -22,12 +51,29 @@ export interface EnhancedEmbeddingData {
     relatedTopics?: string[];
 }
 
+// Simple hash-based fallback embedding generator
+const generateFallbackEmbeddings = (text: string): number[] => {
+    const hash = text.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+    }, 0);
+    
+    // Generate a 1024-dimensional vector using the hash
+    const vector: number[] = [];
+    for (let i = 0; i < 1024; i++) {
+        const seed = (hash + i * 12345) % 1000000;
+        vector.push((seed / 1000000) * 2 - 1); // Normalize to [-1, 1]
+    }
+    
+    return vector;
+};
+
 export const getEmbeddings = async (data: CleanedPayload | string | EnhancedEmbeddingData): Promise<number[]> => {
     let stagedData: string;
     
     if (typeof data === "string") {
         stagedData = data.trim();
-    } else if ('tagTitles' in data) {
+    } else if ('tagTitles' in data && 'type' in data) {
         // Enhanced data with additional context
         const contextParts = [
             data.title,
@@ -39,28 +85,37 @@ export const getEmbeddings = async (data: CleanedPayload | string | EnhancedEmbe
         ].filter(Boolean);
         
         stagedData = contextParts.join(" ").trim();
-    } else {
+    } else if ('tagTitles' in data) {
+        // Basic cleaned payload
         stagedData = (data.title + " " + data.tagTitles.join(" ")).trim();
+    } else {
+        throw new Error("Invalid data format for embeddings");
     }
 
     if (!stagedData) {
         throw new Error("Staged data is empty, cannot generate embeddings.");
     }
     
-    try {
-        const embed = await cohere.v2.embed({
-            model: 'embed-english-v3.0',
-            inputType: 'search_document',
-            embeddingTypes: ['float'],
-            texts: [stagedData],
-        });
-        const vector = embed.embeddings.float![0]
-        return vector;
-
-    } catch (error) {
-        console.error("Error generating embeddings:", error);
-        throw new Error(`Error in getEmbeddings: ${error}`);
+    // Try Cohere first, fallback to hash-based method if unavailable
+    if (cohere) {
+        try {
+            const embed = await cohere.v2.embed({
+                model: 'embed-english-v3.0',
+                inputType: 'search_document',
+                embeddingTypes: ['float'],
+                texts: [stagedData],
+            });
+            const vector = embed.embeddings.float![0];
+            console.log("Generated embeddings using Cohere");
+            return vector;
+        } catch (error) {
+            console.warn("Cohere embedding failed, using fallback method:", error);
+        }
     }
+    
+    // Fallback to hash-based embeddings
+    console.log("Using fallback embedding method");
+    return generateFallbackEmbeddings(stagedData);
 };
 
 // LLM-powered content analysis and reference generation
@@ -77,6 +132,18 @@ export const analyzeContentWithLLM = async (content: {
     relatedTopics: string[];
     insights: string;
 }> => {
+    // Check if Gemini is available
+    if (!geminiModel) {
+        console.log("Gemini not available, using fallback analysis");
+        return {
+            summary: `Content about ${content.title} related to ${content.tags.join(', ')}`,
+            references: [],
+            keywords: content.tags,
+            relatedTopics: [content.type],
+            insights: "Content analysis completed (LLM not available)"
+        };
+    }
+
     try {
         const prompt = `
         Analyze the following content and provide:
@@ -103,25 +170,11 @@ export const analyzeContentWithLLM = async (content: {
         }
         `;
 
-        const completion = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are an expert content analyst. Provide accurate, relevant analysis in the exact JSON format requested."
-                },
-                {
-                    role: "user",
-                    content: prompt
-                }
-            ],
-            temperature: 0.3,
-            max_tokens: 500
-        });
-
-        const response = completion.choices[0]?.message?.content;
+        const result = await geminiModel.generateContent(prompt);
+        const response = result.response.text();
+        
         if (!response) {
-            throw new Error("No response from LLM");
+            throw new Error("No response from Gemini");
         }
 
         // Parse the JSON response
@@ -143,7 +196,7 @@ export const analyzeContentWithLLM = async (content: {
             references: [],
             keywords: content.tags,
             relatedTopics: [content.type],
-            insights: "Content analysis completed"
+            insights: "Content analysis completed (LLM error)"
         };
     }
 };
@@ -164,6 +217,25 @@ export const generateIntelligentReferences = async (
     relevance: number;
     reason: string;
 }>> => {
+    // Check if Gemini is available
+    if (!geminiModel) {
+        console.log("Gemini not available, using fallback reference matching");
+        return existingContent
+            .filter(item => 
+                item.tags.some(tag => 
+                    query.toLowerCase().includes(tag.toLowerCase())
+                ) || 
+                item.title.toLowerCase().includes(query.toLowerCase())
+            )
+            .slice(0, limit)
+            .map(item => ({
+                contentId: item.contentId,
+                title: item.title,
+                relevance: 0.7,
+                reason: "Tag or title match (LLM not available)"
+            }));
+    }
+
     try {
         const prompt = `
         Given the following query and existing content, identify the most relevant references.
@@ -191,29 +263,15 @@ export const generateIntelligentReferences = async (
         }
         `;
 
-        const completion = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are an expert at finding relevant content references. Analyze semantic similarity and provide relevance scores with explanations."
-                },
-                {
-                    role: "user",
-                    content: prompt
-                }
-            ],
-            temperature: 0.2,
-            max_tokens: 800
-        });
-
-        const response = completion.choices[0]?.message?.content;
+        const result = await geminiModel.generateContent(prompt);
+        const response = result.response.text();
+        
         if (!response) {
-            throw new Error("No response from LLM");
+            throw new Error("No response from Gemini");
         }
 
-        const result = JSON.parse(response);
-        return result.references || [];
+        const parsedResult = JSON.parse(response);
+        return parsedResult.references || [];
 
     } catch (error) {
         console.error("Error generating intelligent references:", error);
@@ -230,7 +288,7 @@ export const generateIntelligentReferences = async (
                 contentId: item.contentId,
                 title: item.title,
                 relevance: 0.7,
-                reason: "Tag or title match"
+                reason: "Tag or title match (LLM error)"
             }));
     }
 };
@@ -251,6 +309,16 @@ export const semanticSearchWithContext = async (
     relevance: string;
     suggestedUse: string;
 }>> => {
+    // Check if Gemini is available
+    if (!geminiModel) {
+        console.log("Gemini not available, using basic search context");
+        return searchResults.map(result => ({
+            ...result,
+            relevance: "Semantic match based on vector similarity (LLM not available)",
+            suggestedUse: "Content available for reference"
+        }));
+    }
+
     try {
         const prompt = `
         Analyze the search query and results to provide context and suggestions.
@@ -278,25 +346,11 @@ export const semanticSearchWithContext = async (
         }
         `;
 
-        const completion = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are an expert at analyzing search relevance and suggesting content usage."
-                },
-                {
-                    role: "user",
-                    content: prompt
-                }
-            ],
-            temperature: 0.3,
-            max_tokens: 600
-        });
-
-        const response = completion.choices[0]?.message?.content;
+        const result = await geminiModel.generateContent(prompt);
+        const response = result.response.text();
+        
         if (!response) {
-            throw new Error("No response from LLM");
+            throw new Error("No response from Gemini");
         }
 
         const analysis = JSON.parse(response);
@@ -312,7 +366,7 @@ export const semanticSearchWithContext = async (
         // Return results without enhanced context
         return searchResults.map(result => ({
             ...result,
-            relevance: "Semantic match based on vector similarity",
+            relevance: "Semantic match based on vector similarity (LLM error)",
             suggestedUse: "Content available for reference"
         }));
     }

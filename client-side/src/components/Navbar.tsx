@@ -1,4 +1,5 @@
 import { Button } from "./ui/button";
+import { useNavigate } from "react-router-dom";
 
 interface NavBarComponent {
   onAddContentClick: () => void,
@@ -7,6 +8,8 @@ interface NavBarComponent {
 }
 
 export default function Navbar({ onAddContentClick, onShareContentClick, currentContentId }: NavBarComponent) {
+  const navigate = useNavigate();
+
   return (
     <div className="flex items-center justify-between w-full px-4 py-3">
       <div className="flex items-center gap-2">
@@ -14,6 +17,13 @@ export default function Navbar({ onAddContentClick, onShareContentClick, current
       </div>
 
       <div className="flex gap-3">
+        <Button
+          variant="outline"
+          onClick={() => navigate("/search")}
+          className="text-[#124559] border-[#124559] hover:bg-[#124559] hover:text-[#EFF6E0] transition-colors"
+        >
+          <span className="mr-2">🔍</span> AI Search
+        </Button>
         <Button
           variant="reverse"
           onClick={() => currentContentId && onShareContentClick(currentContentId)}

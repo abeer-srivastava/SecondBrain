@@ -1,3 +1,5 @@
+/* The above code is a TypeScript file that defines various routes for a backend API using Express.
+Here is a summary of what each route does: */
 import express from "express";
 import User from "../models/user";
 import { checkForAuthenticationCookie } from "../middlewares/auth";
@@ -257,6 +259,273 @@ router.delete("/tags/:id", checkForAuthenticationCookie, async (req, res) => {
   } catch (error) {
     console.error("Delete tag error:", error);
     res.status(500).json({ error: "Failed to delete tag" });
+  }
+});
+
+// LLM-powered content analysis and search routes
+router.post("/content/analyze", checkForAuthenticationCookie, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const { contentId } = req.body;
+    if (!contentId) {
+      return res.status(400).json({ error: "Content ID is required" });
+    }
+    
+    // Get content from database
+    const content = await Content.findById(contentId);
+    if (!content) {
+      return res.status(404).json({ error: "Content not found" });
+    }
+    
+    // Check if user owns this content
+    if (String(content.userId) !== String((req.user as JwtPayload)._id)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    
+    // Analyze content with LLM
+    const { analyzeContentWithLLM } = await import("../utils/TextEmbeddings.js");
+    const analysis = await analyzeContentWithLLM({
+      title: content.title,
+      link: content.link,
+      type: content.type,
+      tags: content.tags,
+    });
+    
+    // Update content with analysis results
+    content.summary = analysis.summary;
+    content.references = analysis.references;
+    content.keywords = analysis.keywords;
+    content.relatedTopics = analysis.relatedTopics;
+    content.insights = analysis.insights;
+    content.llmAnalyzed = true;
+    content.analyzedAt = new Date();
+    
+    await content.save();
+    
+    // Update Qdrant with enhanced data
+    const { QdrantUpsertPoints } = await import("../utils/QdrantProcessing.js");
+    await QdrantUpsertPoints({
+      contentId: String(content._id),
+      title: content.title,
+      link: content.link,
+      type: content.type,
+      tags: content.tags,
+    });
+    
+    res.json({
+      success: true,
+      analysis,
+      content: {
+        id: content._id,
+        title: content.title,
+        summary: content.summary,
+        references: content.references,
+        keywords: content.keywords,
+        relatedTopics: content.relatedTopics,
+        insights: content.insights,
+      }
+    });
+    
+  } catch (error) {
+    console.error("Content analysis error:", error);
+    res.status(500).json({ error: "Failed to analyze content" });
+  }
+});
+
+// Intelligent search with LLM context
+router.post("/content/search", checkForAuthenticationCookie, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const { query, limit = 5 } = req.body;
+    if (!query) {
+      return res.status(400).json({ error: "Search query is required" });
+    }
+    
+    const { QdrantSearchWithContext } = await import("../utils/QdrantProcessing.js");
+    const searchResults = await QdrantSearchWithContext(query, limit);
+    
+    res.json({
+      success: true,
+      query,
+      results: searchResults,
+      total: searchResults.length
+    });
+    
+  } catch (error) {
+    console.error("Search error:", error);
+    res.status(500).json({ error: "Failed to perform search" });
+  }
+});
+
+// Get intelligent references for a query
+router.post("/content/references", checkForAuthenticationCookie, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const { query, limit = 5 } = req.body;
+    if (!query) {
+      return res.status(400).json({ error: "Query is required" });
+    }
+    
+    const { getIntelligentReferences } = await import("../utils/QdrantProcessing.js");
+    const references = await getIntelligentReferences(query, limit);
+    
+    res.json({
+      success: true,
+      query,
+      references,
+      total: references.length
+    });
+    
+  } catch (error) {
+    console.error("References error:", error);
+    res.status(500).json({ error: "Failed to get references" });
+  }
+});
+
+// Get content recommendations
+router.get("/content/:contentId/recommendations", checkForAuthenticationCookie, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const { contentId } = req.params;
+    const { limit = 5 } = req.query;
+    
+    // Check if user owns this content
+    const content = await Content.findById(contentId);
+    if (!content) {
+      return res.status(404).json({ error: "Content not found" });
+    }
+    
+    if (String(content.userId) !== String((req.user as JwtPayload)._id)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    
+    const { getContentRecommendations } = await import("../utils/QdrantProcessing.js");
+    const recommendations = await getContentRecommendations(contentId, Number(limit));
+    
+    res.json({
+      success: true,
+      contentId,
+      recommendations,
+      total: recommendations.length
+    });
+    
+  } catch (error) {
+    console.error("Recommendations error:", error);
+    res.status(500).json({ error: "Failed to get recommendations" });
+  }
+});
+
+// Batch analyze all user's content
+router.post("/content/batch-analyze", checkForAuthenticationCookie, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const userId = (req.user as JwtPayload)._id;
+    
+    // Get all user's content
+    const userContent = await Content.find({ userId });
+    
+    if (userContent.length === 0) {
+      return res.json({
+        success: true,
+        message: "No content to analyze",
+        results: []
+      });
+    }
+    
+    // Start batch analysis in background
+    const { batchAnalyzeContent } = await import("../utils/QdrantProcessing.js");
+    
+    // Run analysis asynchronously
+    batchAnalyzeContent().then((results: any[]) => {
+      console.log("Background batch analysis completed:", results);
+    }).catch((error: any) => {
+      console.error("Background batch analysis failed:", error);
+    });
+    
+    res.json({
+      success: true,
+      message: "Batch analysis started in background",
+      contentCount: userContent.length,
+      estimatedTime: `${Math.ceil(userContent.length * 1.5)} seconds`
+    });
+    
+  } catch (error) {
+    console.error("Batch analysis error:", error);
+    res.status(500).json({ error: "Failed to start batch analysis" });
+  }
+});
+
+// Get content insights and analytics
+router.get("/content/insights", checkForAuthenticationCookie, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const userId = (req.user as JwtPayload)._id;
+    
+    // Get content statistics
+    const totalContent = await Content.countDocuments({ userId });
+    const analyzedContent = await Content.countDocuments({ 
+      userId, 
+      llmAnalyzed: true 
+    });
+    
+    // Get content by type
+    const contentByType = await Content.aggregate([
+      { $match: { userId } },
+      { $group: { _id: "$type", count: { $sum: 1 } } }
+    ]);
+    
+    // Get most common tags
+    const tagStats = await Content.aggregate([
+      { $match: { userId } },
+      { $unwind: "$tags" },
+      { $group: { _id: "$tags.title", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+    
+    // Get recent analysis insights
+    const recentInsights = await Content.find({ 
+      userId, 
+      llmAnalyzed: true,
+      insights: { $exists: true, $ne: "" }
+    })
+    .sort({ analyzedAt: -1 })
+    .limit(5)
+    .select('title insights analyzedAt');
+    
+    res.json({
+      success: true,
+      insights: {
+        totalContent,
+        analyzedContent,
+        analysisPercentage: totalContent > 0 ? Math.round((analyzedContent / totalContent) * 100) : 0,
+        contentByType,
+        topTags: tagStats,
+        recentInsights
+      }
+    });
+    
+  } catch (error) {
+    console.error("Insights error:", error);
+    res.status(500).json({ error: "Failed to get insights" });
   }
 });
 

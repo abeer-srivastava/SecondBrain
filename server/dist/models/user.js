@@ -32,15 +32,6 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const crypto_1 = require("crypto");
@@ -70,24 +61,22 @@ userSchema.pre("save", function (next) {
     this.password = hashedPassword;
     next();
 });
-userSchema.static("matchPasswordAndGenerateToken", function (username, password) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const user = yield this.findOne({ username });
-        // console.log("user",user);
-        // console.log("typeof",typeof user);
-        if (!user) {
-            throw new Error("The User Is Not Registed");
-        }
-        const hashedPassword = user.password;
-        const salt = user.salt;
-        const userGeneratedHash = (0, crypto_1.createHmac)("sha256", salt).update(password).digest("hex");
-        if (hashedPassword !== userGeneratedHash) {
-            throw new Error("The Password Doesnot Match");
-        }
-        const token = (0, auth_1.createWebToken)(user);
-        // console.log(token);
-        return token;
-    });
+userSchema.static("matchPasswordAndGenerateToken", async function (username, password) {
+    const user = await this.findOne({ username });
+    // console.log("user",user);
+    // console.log("typeof",typeof user);
+    if (!user) {
+        throw new Error("The User Is Not Registed");
+    }
+    const hashedPassword = user.password;
+    const salt = user.salt;
+    const userGeneratedHash = (0, crypto_1.createHmac)("sha256", salt).update(password).digest("hex");
+    if (hashedPassword !== userGeneratedHash) {
+        throw new Error("The Password Doesnot Match");
+    }
+    const token = (0, auth_1.createWebToken)(user);
+    // console.log(token);
+    return token;
 });
 const User = mongoose_1.default.model("user", userSchema);
 exports.default = User;

@@ -1,7 +1,9 @@
 import mongoose from "mongoose";
 import {Tag} from "./tags";
 import User from "./user";
+
 export const contentType=["tweet","video","article","document","link"] as const ;
+
 export const contentSchema=new mongoose.Schema({
     link:{
         type:String,
@@ -24,10 +26,40 @@ export const contentSchema=new mongoose.Schema({
         type:mongoose.Types.ObjectId,
         ref:"User",
         required:true,
-    },shareLink:{
+    },
+    shareLink:{
         type:String,
         unique:true,
         sparse:true
+    },
+    // LLM Analysis Fields
+    summary: {
+        type: String,
+        required: false
+    },
+    references: [{
+        type: String,
+        required: false
+    }],
+    keywords: [{
+        type: String,
+        required: false
+    }],
+    relatedTopics: [{
+        type: String,
+        required: false
+    }],
+    insights: {
+        type: String,
+        required: false
+    },
+    llmAnalyzed: {
+        type: Boolean,
+        default: false
+    },
+    analyzedAt: {
+        type: Date,
+        required: false
     }
 },{timestamps:true});
 
