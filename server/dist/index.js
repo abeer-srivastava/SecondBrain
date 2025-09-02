@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // Load environment variables first
 const dotenv_1 = __importDefault(require("dotenv"));
 // Load environment variables from .env file in the project root
-const envPath = '/home/levi1604/second_Brain/.env';
+const envPath = '/home/levi1604/second_Brain/server/.env';
 console.log('Loading .env from:', envPath);
 dotenv_1.default.config({
     path: envPath,

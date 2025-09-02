@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 
 // Load environment variables from .env file in the project root
-const envPath = '/home/levi1604/second_Brain/.env';
+const envPath = '/home/levi1604/second_Brain/server/.env';
 console.log('Loading .env from:', envPath);
 dotenv.config({ 
   path: envPath,
