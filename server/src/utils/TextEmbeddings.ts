@@ -1,7 +1,7 @@
 import { CleanedPayload } from "./cleanPayload";
 import { CohereClient } from 'cohere-ai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-
+import JSON5 from "json5";
 // Initialize Cohere client only if API key is available
 let cohere: CohereClient | null = null;
 try {
@@ -49,6 +49,19 @@ export interface EnhancedEmbeddingData {
     references?: string[];
     keywords?: string[];
     relatedTopics?: string[];
+}
+
+function safeJSONParse(text: string) {
+  try {
+    return JSON.parse(text); // strict parse
+  } catch {
+    try {
+      return JSON5.parse(text); // tolerant parse
+    } catch (err) {
+      console.error("Failed to parse LLM response as JSON:", text);
+      throw err;
+    }
+  }
 }
 
 // Simple hash-based fallback embedding generator
@@ -171,11 +184,17 @@ export const analyzeContentWithLLM = async (content: {
         `;
 
         const result = await geminiModel.generateContent(prompt);
-        const response = result.response.text();
+        let response = result.response.text();
         
         if (!response) {
             throw new Error("No response from Gemini");
         }
+       response = response
+        .replace(/```json|```/g, "")
+        .replace(/(\w+):/g, '"$1":')   
+        .replace(/'/g, '"')            
+        .trim();
+
 
         // Parse the JSON response
         const analysis = JSON.parse(response);
@@ -237,7 +256,8 @@ export const generateIntelligentReferences = async (
     }
 
     try {
-        const prompt = `
+        const prompt = `Respond with ONLY strict JSON. Do not include any extra text, comments, or code fences.
+        All keys must be in double quotes. All string values must use double quotes.
         Given the following query and existing content, identify the most relevant references.
         
         Query: ${query}
@@ -347,12 +367,17 @@ export const semanticSearchWithContext = async (
         `;
 
         const result = await geminiModel.generateContent(prompt);
-        const response = result.response.text();
+        let response = result.response.text();
         
         if (!response) {
             throw new Error("No response from Gemini");
         }
 
+        response = response
+        .replace(/```json|```/g, "")
+        .replace(/(\w+):/g, '"$1":')   
+        .replace(/'/g, '"')         
+        .trim();
         const analysis = JSON.parse(response);
         
         return searchResults.map((result, index) => ({

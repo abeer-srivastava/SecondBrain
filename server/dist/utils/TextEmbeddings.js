@@ -1,8 +1,12 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.semanticSearchWithContext = exports.generateIntelligentReferences = exports.analyzeContentWithLLM = exports.getEmbeddings = void 0;
 const cohere_ai_1 = require("cohere-ai");
 const generative_ai_1 = require("@google/generative-ai");
+const json5_1 = __importDefault(require("json5"));
 // Initialize Cohere client only if API key is available
 let cohere = null;
 try {
@@ -40,6 +44,21 @@ catch (error) {
     console.warn("Failed to initialize Gemini client:", error);
     genAI = null;
     geminiModel = null;
+}
+function safeJSONParse(text) {
+    try {
+        console.log(text);
+        return JSON.parse(text); // strict parse
+    }
+    catch {
+        try {
+            return json5_1.default.parse(text); // tolerant parse
+        }
+        catch (err) {
+            console.error("Failed to parse LLM response as JSON:", text);
+            throw err;
+        }
+    }
 }
 // Simple hash-based fallback embedding generator
 const generateFallbackEmbeddings = (text) => {
@@ -143,12 +162,17 @@ const analyzeContentWithLLM = async (content) => {
         }
         `;
         const result = await geminiModel.generateContent(prompt);
-        const response = result.response.text();
+        let response = result.response.text();
         if (!response) {
             throw new Error("No response from Gemini");
         }
+        response = response
+            .replace(/```json|```/g, "")
+            .replace(/(\w+):/g, '"$1":')
+            .replace(/'/g, '"')
+            .trim();
         // Parse the JSON response
-        const analysis = JSON.parse(response);
+        const analysis = safeJSONParse(response);
         return {
             summary: analysis.summary || "",
             references: analysis.references || [],
@@ -187,7 +211,8 @@ const generateIntelligentReferences = async (query, existingContent, limit = 5) 
         }));
     }
     try {
-        const prompt = `
+        const prompt = `Respond with ONLY strict JSON. Do not include any extra text, comments, or code fences.
+        All keys must be in double quotes. All string values must use double quotes.
         Given the following query and existing content, identify the most relevant references.
         
         Query: ${query}
@@ -270,11 +295,16 @@ const semanticSearchWithContext = async (query, embeddings, searchResults) => {
         }
         `;
         const result = await geminiModel.generateContent(prompt);
-        const response = result.response.text();
+        let response = result.response.text();
         if (!response) {
             throw new Error("No response from Gemini");
         }
-        const analysis = JSON.parse(response);
+        response = response
+            .replace(/```json|```/g, "")
+            .replace(/(\w+):/g, '"$1":')
+            .replace(/'/g, '"')
+            .trim();
+        const analysis = safeJSONParse(response);
         return searchResults.map((result, index) => ({
             ...result,
             relevance: analysis.results?.[index]?.relevance || "Relevance analysis unavailable",
