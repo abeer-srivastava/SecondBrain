@@ -15,7 +15,7 @@ export default function SearchPage() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
-              variant="ghost"
+              variant="default"
               onClick={() => navigate("/page")}
               className="text-[#124559] hover:bg-[#AEC3B0]"
             >

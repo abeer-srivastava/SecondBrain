@@ -16,7 +16,7 @@ const cleanPayload = (data) => {
     return {
         title,
         contentId,
-        tagTitles,
     };
 };
 exports.cleanPayload = cleanPayload;
+// remove the tagtitles from the return and the props 

@@ -99,6 +99,13 @@ export default function Signup() {
           >
             <span className="mr-2">🚀</span> Sign Up
           </Button>
+            <div>
+              <span>
+                 Already have an Account then<Button className="text-green-800 border-0 text-lg pl-0" onClick={()=>{
+                  navigate("/signin");
+                 }}>SignIn</Button>
+              </span>
+            </div>
         </form>
       </div>
     </div>

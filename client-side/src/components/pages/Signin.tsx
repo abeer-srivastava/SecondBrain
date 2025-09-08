@@ -253,6 +253,13 @@ export default function Signin() {
               </>
             )}
           </Button>
+            <div>
+              <span>
+                 Wanted To Create an Account <Button className="text-green-800 border-0 text-md pl-0" onClick={()=>{
+                  navigate("/signup");
+                 }}>Signup</Button>
+              </span>
+            </div>
         </form>
       </div>
     </div>

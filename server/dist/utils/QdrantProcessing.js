@@ -4,63 +4,62 @@ exports.QdrantDelete = exports.batchAnalyzeContent = exports.getContentRecommend
 const cleanPayload_1 = require("./cleanPayload");
 const TextEmbeddings_1 = require("./TextEmbeddings");
 const Qd_config_1 = require("../config/Qd.config");
-const QdrantUpsertPoints = async (data) => {
-    console.log("data in Qdrant", data);
+/**
+ * Upsert content into Qdrant with embeddings + optional LLM analysis
+ */
+const QdrantUpsertPoints = async (data, runAnalysis = true) => {
     try {
-        // Get basic payload
+        // Clean base payload
         const payload = (0, cleanPayload_1.cleanPayload)(data);
-        console.log("payload in Qdrant", payload);
-        // Enhanced LLM analysis for better embeddings
-        const llmAnalysis = await (0, TextEmbeddings_1.analyzeContentWithLLM)({
-            title: data.title,
-            link: data.link,
-            type: data.type,
-            tags: data.tags.map(tag => {
-                if (typeof tag === 'string') {
-                    return tag;
-                }
-                else if (tag && typeof tag === 'object' && 'title' in tag) {
-                    return tag.title;
-                }
-                return '';
-            }).filter(Boolean),
-        });
-        // Create enhanced embedding data
+        let llmAnalysis = {};
+        if (runAnalysis) {
+            llmAnalysis = await (0, TextEmbeddings_1.analyzeContentWithLLM)({
+                title: data.title,
+                link: data.link,
+                type: data.type,
+                tags: data.tags.map(tag => typeof tag === "string" ? tag : (tag?.title ?? "")).filter(Boolean),
+            });
+        }
+        // Build enhanced embedding data
         const enhancedData = {
             ...payload,
             link: data.link,
             type: data.type,
-            summary: llmAnalysis.summary,
-            references: llmAnalysis.references,
-            keywords: llmAnalysis.keywords,
-            relatedTopics: llmAnalysis.relatedTopics,
+            ...(runAnalysis && {
+                summary: llmAnalysis.summary,
+                references: llmAnalysis.references,
+                keywords: llmAnalysis.keywords,
+                relatedTopics: llmAnalysis.relatedTopics,
+            }),
         };
-        // Generate enhanced embeddings with LLM context
+        // Generate embeddings
         const embeddings = await (0, TextEmbeddings_1.getEmbeddings)(enhancedData);
-        // Store enhanced payload with LLM analysis
+        // Enhanced payload stored in Qdrant
         const enhancedPayload = {
             ...payload,
-            summary: llmAnalysis.summary,
-            references: llmAnalysis.references,
-            keywords: llmAnalysis.keywords,
-            relatedTopics: llmAnalysis.relatedTopics,
-            insights: llmAnalysis.insights,
-            llmAnalyzed: true,
-            analyzedAt: new Date().toISOString()
+            ...(runAnalysis && {
+                summary: llmAnalysis.summary,
+                references: llmAnalysis.references,
+                keywords: llmAnalysis.keywords,
+                relatedTopics: llmAnalysis.relatedTopics,
+                insights: llmAnalysis.insights,
+                llmAnalyzed: true,
+                analyzedAt: new Date().toISOString(),
+            }),
         };
         await Qd_config_1.client.upsert("secondBrain", {
-            points: [{
-                    id: data.contentId,
+            points: [
+                {
+                    id: payload.contentId, // consistent id usage
                     payload: enhancedPayload,
                     vector: embeddings,
-                }]
+                },
+            ],
         });
-        console.log("Qdrant Created id: ", data.contentId);
-        console.log("LLM Analysis completed for: ", data.title);
         return {
             success: true,
-            contentId: data.contentId,
-            analysis: llmAnalysis
+            contentId: payload.contentId,
+            ...(runAnalysis ? { analysis: llmAnalysis } : {}),
         };
     }
     catch (error) {
@@ -69,17 +68,20 @@ const QdrantUpsertPoints = async (data) => {
     }
 };
 exports.QdrantUpsertPoints = QdrantUpsertPoints;
+/**
+ * Basic vector search
+ */
 const QdrantSearch = async (embeddings, limit = 3) => {
     try {
         const response = await Qd_config_1.client.search("secondBrain", {
             vector: embeddings,
-            limit: limit,
-            with_payload: true
+            limit,
+            with_payload: true,
         });
-        return response.map(response => ({
-            id: response.id,
-            payload: response.payload,
-            score: response.score
+        return response.map(res => ({
+            id: String(res.id),
+            payload: res.payload,
+            score: res.score,
         }));
     }
     catch (error) {
@@ -88,19 +90,15 @@ const QdrantSearch = async (embeddings, limit = 3) => {
     }
 };
 exports.QdrantSearch = QdrantSearch;
-// Enhanced search with LLM context and intelligent references
+/**
+ * Enhanced semantic search
+ */
 const QdrantSearchWithContext = async (query, limit = 5) => {
     try {
-        // First, get embeddings for the query
         const queryEmbeddings = await (0, TextEmbeddings_1.getEmbeddings)(query);
-        // Search in Qdrant
         const searchResults = await (0, exports.QdrantSearch)(queryEmbeddings, limit);
-        // Enhance results with LLM context
-        const enhancedResults = await (0, TextEmbeddings_1.semanticSearchWithContext)(query, queryEmbeddings, searchResults.map(result => ({
-            id: String(result.id),
-            payload: result.payload || {},
-            score: result.score
-        })));
+        // Directly enrich search results
+        const enhancedResults = await (0, TextEmbeddings_1.semanticSearchWithContext)(query, queryEmbeddings, searchResults);
         return enhancedResults;
     }
     catch (error) {
@@ -109,23 +107,24 @@ const QdrantSearchWithContext = async (query, limit = 5) => {
     }
 };
 exports.QdrantSearchWithContext = QdrantSearchWithContext;
-// Generate intelligent references for a given query
+/**
+ * Get intelligent references (LLM-driven connections between items)
+ */
 const getIntelligentReferences = async (query, limit = 5) => {
     try {
-        // Get all content from Qdrant for analysis
         const allContent = await Qd_config_1.client.scroll("secondBrain", {
-            limit: 100, // Adjust based on your content size
-            with_payload: true
+            limit: 100,
+            with_payload: true,
         });
         const contentForAnalysis = allContent.points.map(point => ({
             contentId: String(point.id),
-            title: String(point.payload?.title || ''),
-            tags: Array.isArray(point.payload?.tagTitles) ? point.payload.tagTitles.map(t => String(t)) : [],
-            type: String(point.payload?.type || '')
+            title: String(point.payload?.title || ""),
+            tags: Array.isArray(point.payload?.tagTitles)
+                ? point.payload.tagTitles.map((t) => String(t))
+                : [],
+            type: String(point.payload?.type || ""),
         }));
-        // Generate intelligent references using LLM
-        const references = await (0, TextEmbeddings_1.generateIntelligentReferences)(query, contentForAnalysis, limit);
-        return references;
+        return (0, TextEmbeddings_1.generateIntelligentReferences)(query, contentForAnalysis, limit);
     }
     catch (error) {
         console.error("Error generating intelligent references:", error);
@@ -133,38 +132,34 @@ const getIntelligentReferences = async (query, limit = 5) => {
     }
 };
 exports.getIntelligentReferences = getIntelligentReferences;
-// Content recommendation system
+/**
+ * Get recommended content based on similarity
+ */
 const getContentRecommendations = async (contentId, limit = 5) => {
     try {
-        // Get the target content
+        // Retrieve the target content
         const targetContent = await Qd_config_1.client.retrieve("secondBrain", {
-            ids: [contentId]
+            ids: [contentId],
+            with_payload: true,
+            with_vector: true,
         });
-        if (!targetContent.length) {
-            throw new Error("Content not found");
+        if (!targetContent.length || !targetContent[0].vector) {
+            throw new Error("Content or vector not found");
         }
         const target = targetContent[0];
-        // Search for similar content
         const similarContent = await Qd_config_1.client.search("secondBrain", {
             vector: target.vector,
-            limit: limit + 1, // +1 to exclude the target itself
+            limit: limit + 1,
             with_payload: true,
             filter: {
-                must_not: [
-                    {
-                        key: "contentId",
-                        match: { value: contentId }
-                    }
-                ]
-            }
+                must_not: [{ key: "contentId", match: { value: contentId } }],
+            },
         });
-        // Enhance with LLM analysis
-        const recommendations = await (0, TextEmbeddings_1.semanticSearchWithContext)(`Content similar to: ${target.payload?.title}`, target.vector, similarContent.map(item => ({
+        return (0, TextEmbeddings_1.semanticSearchWithContext)(`Content similar to: ${target.payload?.title}`, target.vector, similarContent.map(item => ({
             id: String(item.id),
             payload: item.payload || {},
-            score: item.score
+            score: item.score,
         })));
-        return recommendations;
     }
     catch (error) {
         console.error("Error getting content recommendations:", error);
@@ -172,37 +167,31 @@ const getContentRecommendations = async (contentId, limit = 5) => {
     }
 };
 exports.getContentRecommendations = getContentRecommendations;
-// Batch content analysis for existing content
+/**
+ * Batch LLM analysis for unanalyzed content
+ */
 const batchAnalyzeContent = async () => {
     try {
-        console.log("Starting batch content analysis...");
-        // Get all content that hasn't been analyzed by LLM
         const unanalyzedContent = await Qd_config_1.client.scroll("secondBrain", {
             limit: 100,
             with_payload: true,
-            filter: {
-                must_not: [
-                    {
-                        key: "llmAnalyzed",
-                        match: { value: true }
-                    }
-                ]
-            }
+            filter: { must_not: [{ key: "llmAnalyzed", match: { value: true } }] },
+            with_vector: true, // ✅ need vectors for re-upsert
         });
-        console.log(`Found ${unanalyzedContent.points.length} items to analyze`);
         const results = [];
         for (const point of unanalyzedContent.points) {
             try {
-                // Re-analyze with LLM
                 const llmAnalysis = await (0, TextEmbeddings_1.analyzeContentWithLLM)({
-                    title: String(point.payload?.title || ''),
-                    link: String(point.payload?.link || ''),
-                    type: String(point.payload?.type || ''),
-                    tags: Array.isArray(point.payload?.tagTitles) ? point.payload.tagTitles.map(t => String(t)) : [],
+                    title: String(point.payload?.title || ""),
+                    link: String(point.payload?.link || ""),
+                    type: String(point.payload?.type || ""),
+                    tags: Array.isArray(point.payload?.tagTitles)
+                        ? point.payload.tagTitles.map((t) => String(t))
+                        : [],
                 });
-                // Update the point with new analysis using upsert instead of update
                 await Qd_config_1.client.upsert("secondBrain", {
-                    points: [{
+                    points: [
+                        {
                             id: point.id,
                             payload: {
                                 ...point.payload,
@@ -212,30 +201,22 @@ const batchAnalyzeContent = async () => {
                                 relatedTopics: llmAnalysis.relatedTopics,
                                 insights: llmAnalysis.insights,
                                 llmAnalyzed: true,
-                                analyzedAt: new Date().toISOString()
+                                analyzedAt: new Date().toISOString(),
                             },
-                            vector: point.vector
-                        }]
+                            vector: point.vector, // ✅ re-use existing vector
+                        },
+                    ],
                 });
-                results.push({
-                    contentId: String(point.id),
-                    success: true,
-                    analysis: llmAnalysis
-                });
-                console.log(`Analyzed content: ${point.payload?.title}`);
-                // Small delay to avoid rate limiting
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                results.push({ contentId: String(point.id), success: true });
             }
-            catch (error) {
-                console.error(`Error analyzing content ${point.id}:`, error);
+            catch (err) {
                 results.push({
                     contentId: String(point.id),
                     success: false,
-                    error: error.message || 'Unknown error'
+                    error: err.message || "Unknown error",
                 });
             }
         }
-        console.log("Batch analysis completed");
         return results;
     }
     catch (error) {
@@ -244,13 +225,13 @@ const batchAnalyzeContent = async () => {
     }
 };
 exports.batchAnalyzeContent = batchAnalyzeContent;
+/**
+ * Delete content from Qdrant
+ */
 const QdrantDelete = async (contentId) => {
     try {
-        await Qd_config_1.client.delete("secondBrain", {
-            points: [contentId]
-        });
-        console.log("Qdrant Deleting id: ", contentId);
-        return;
+        await Qd_config_1.client.delete("secondBrain", { points: [contentId] });
+        console.log("Qdrant Deleted id:", contentId);
     }
     catch (error) {
         console.error("Error deleting points:", error);

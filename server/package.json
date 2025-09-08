@@ -24,6 +24,7 @@
     "esrun": "^3.2.30",
     "express": "^5.1.0",
     "json5": "^2.2.3",
+    "jsonrepair": "^3.13.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.4",
     "typescript": "^5.8.3",

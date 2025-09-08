@@ -3,7 +3,6 @@ import { ContentType } from "../types/Schemas";
 export type CleanedPayload = {
     title: string;
     contentId: string;
-    tagTitles: string[];
 };
 export const cleanPayload = (data: ContentType): CleanedPayload => {
     const { title, tags, contentId } = data;
@@ -21,6 +20,7 @@ export const cleanPayload = (data: ContentType): CleanedPayload => {
     return {
         title,
         contentId,
-        tagTitles,
     };
 };
+
+// remove the tagtitles from the return and the props 
