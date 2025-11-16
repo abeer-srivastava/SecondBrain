@@ -1,5 +1,4 @@
-/* The above code is a TypeScript file that defines various routes for a backend API using Express.
-Here is a summary of what each route does: */
+
 import express from "express";
 import User from "../models/user";
 import { checkForAuthenticationCookie } from "../middlewares/auth";
